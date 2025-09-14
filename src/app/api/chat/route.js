@@ -142,7 +142,7 @@ Guidelines for natural conversation:
             if (latestMessage.match(pattern)) {
                 clearCartTriggered = true;
                 try {
-                    const clearCartResponse = await fetch('http://localhost:8042/api/user/clearCart', {
+                    const clearCartResponse = await fetch(`${process.env.API_URL}/api/user/clearCart`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

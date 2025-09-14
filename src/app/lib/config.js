@@ -1,6 +1,6 @@
 export const config = {
-  searchProductsUrl: 'http://localhost:8042/api/admin/get_all_product/search',
-  addToCartUrl: 'http://localhost:8042/api/user/add_to_cart',
+  searchProductsUrl: `${process.env.API_URL}/api/admin/get_all_product/search`,
+  addToCartUrl: `${process.env.API_URL}/api/user/add_to_cart`,
   
   // Admin token for product search
   adminToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MjA1LCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NTc3MTU5MzMsImV4cCI6MTc4OTI3MzUzM30.xXDtmKCQXNRe_A2EEdH4zxrBSpDEUqRNaCJmHZm2wvw',

@@ -20,7 +20,7 @@ const EnhancedVoiceChat = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [systemInstruction, setSystemInstruction] = useState(
-    "You are a helpful AI assistant for an e-commerce platform. Provide concise, engaging responses. When users request products, return a list of relevant products with details (name, price, description, image) without mentioning them in the text response unless necessary. Let the user select a product before taking actions like adding to cart. Remember context and user preferences."
+    "You are Deli Bot, created by DeliverIt (founded by Sidhant Suri with CTO Kunal Aashri). You are NOT Google. You specialize exclusively in DeliverIt’s 1-hour delivery service, products, services, technology, and company information. Always be enthusiastic about DeliverIt’s 1-hour delivery! If users ask about unrelated topics, politely redirect them back to DeliverIt. You can do many things, such as booking an order, adding items to the cart (e.g., 'Add Amul Butter to my cart' or 'Add Tomato Hybrid to my cart'), or clearing the cart. If someone asks 'What can you do?', give helpful examples like adding products or clearing the cart."
   );
   const [showSettings, setShowSettings] = useState(false);
   const [textInput, setTextInput] = useState("");
@@ -28,20 +28,50 @@ const EnhancedVoiceChat = () => {
   const [memory, setMemory] = useState({
     lists: {},
     context: {},
-    preferences: {},
+    preferences: { selectedVoice: null }, // Initialize with null
   });
   const [interimTranscript, setInterimTranscript] = useState("");
-  const [autoListen, setAutoListen] = useState(false); // Changed default to false
+  const [autoListen, setAutoListen] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [voices, setVoices] = useState([]); // Store available voices
+  const [selectedVoice, setSelectedVoice] = useState(null); // Store selected voice
 
   const recognitionRef = useRef(null);
   const speechSynthesisRef = useRef(null);
   const messagesEndRef = useRef(null);
   const silenceTimeoutRef = useRef(null);
   const conversationTimeoutRef = useRef(null);
-  const lastProcessedTranscriptRef = useRef("");
   const isProcessingMessageRef = useRef(false);
+  const lastProcessedTranscriptRef = useRef("");
+
+  // Load voices and handle voice changes
+  useEffect(() => {
+    const loadVoices = () => {
+      const availableVoices = window.speechSynthesis.getVoices();
+      setVoices(availableVoices);
+      console.log("Available voices:", availableVoices);
+
+      // Set default voice from memory or first available voice
+      if (availableVoices.length > 0) {
+        const savedVoice = memory.preferences.selectedVoice;
+        const defaultVoice = savedVoice
+          ? availableVoices.find((voice) => voice.name === savedVoice)
+          : availableVoices[88];
+        setSelectedVoice(defaultVoice || null);
+      }
+    };
+
+    // Load voices initially
+    loadVoices();
+
+    // Listen for voice changes (voices load asynchronously in some browsers)
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null; // Cleanup
+    };
+  }, [memory.preferences.selectedVoice]);
 
   // Enhanced scroll with smooth animation
   useEffect(() => {
@@ -64,7 +94,6 @@ const EnhancedVoiceChat = () => {
     ) {
       setSuccessMessage(lastMessage.content);
       setShowSuccessPopup(true);
-      // Remove confetti trigger here to avoid issues
       setTimeout(() => setShowSuccessPopup(false), 3000);
     }
   }, [messages]);
@@ -78,19 +107,16 @@ const EnhancedVoiceChat = () => {
 
       recognition.lang = "en-US";
       recognition.interimResults = true;
-      recognition.continuous = false; // Changed to false for better control
+      recognition.continuous = false;
       recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
-
         setIsRecording(true);
         setIsListening(true);
       };
 
       recognition.onresult = (event) => {
-        // Prevent processing if we're already handling a message or AI is speaking
         if (isProcessingMessageRef.current || isSpeaking) {
-
           return;
         }
 
@@ -106,28 +132,18 @@ const EnhancedVoiceChat = () => {
           }
         }
 
-        // Only update interim if it's different and substantial
         if (interim && interim.length > 2) {
           setInterimTranscript(interim);
         }
 
-        // Process final transcript with duplicate prevention
         if (final && final.length > 2) {
-          // Check if this is a duplicate or very similar to last processed
           const similarity = calculateSimilarity(final, lastProcessedTranscriptRef.current);
-
-          if (similarity < 0.8) { // Only process if less than 80% similar
-
+          if (similarity < 0.8) {
             lastProcessedTranscriptRef.current = final;
             setInterimTranscript("");
             clearTimeout(silenceTimeoutRef.current);
-
-            // Stop recognition immediately to prevent further input
             recognition.stop();
-
             handleUserMessage(final);
-          } else {
-
           }
         }
       };
@@ -139,7 +155,6 @@ const EnhancedVoiceChat = () => {
         setInterimTranscript("");
         isProcessingMessageRef.current = false;
 
-        // Only retry on specific errors and if auto-listen is enabled
         if (
           ["no-speech", "audio-capture"].includes(event.error) &&
           autoListen &&
@@ -151,17 +166,9 @@ const EnhancedVoiceChat = () => {
       };
 
       recognition.onend = () => {
-
         setIsRecording(false);
         setIsListening(false);
-
-        // Only restart if conditions are met
-        if (
-          autoListen &&
-          !isSpeaking &&
-          !isProcessingMessageRef.current &&
-          !isLoading
-        ) {
+        if (autoListen && !isSpeaking && !isProcessingMessageRef.current && !isLoading) {
           setTimeout(() => restartListening(), 1000);
         }
       };
@@ -175,7 +182,6 @@ const EnhancedVoiceChat = () => {
     };
   }, [autoListen, isSpeaking, isLoading]);
 
-  // Function to calculate text similarity (simple implementation)
   const calculateSimilarity = (str1, str2) => {
     if (!str1 || !str2) return 0;
     const longer = str1.length > str2.length ? str1 : str2;
@@ -217,11 +223,9 @@ const EnhancedVoiceChat = () => {
       autoListen
     ) {
       try {
-
         recognitionRef.current.start();
       } catch (error) {
         console.error("Failed to restart recognition:", error);
-        // Wait longer before retrying if there's an error
         setTimeout(() => {
           if (autoListen && !isSpeaking && !isLoading && !isProcessingMessageRef.current) {
             try {
@@ -242,19 +246,16 @@ const EnhancedVoiceChat = () => {
     }
 
     if (isRecording) {
-
       recognitionRef.current.stop();
       setIsRecording(false);
       setIsListening(false);
       setAutoListen(false);
       isProcessingMessageRef.current = false;
     } else {
-
       stopSpeaking();
       setAutoListen(true);
       isProcessingMessageRef.current = false;
       lastProcessedTranscriptRef.current = "";
-
       try {
         recognitionRef.current.start();
       } catch (error) {
@@ -265,57 +266,70 @@ const EnhancedVoiceChat = () => {
 
   // Handle product selection
   const handleProductSelect = async (product, assistantMessageIndex) => {
+    console.log("handleProductSelect called for:", product);
     isProcessingMessageRef.current = true;
 
-    // Stop any ongoing recognition
     if (recognitionRef.current && isRecording) {
+      console.log("Stopping recognition");
       recognitionRef.current.stop();
     }
+
     try {
-      console.log("Product selected:", product);
-      const response = await axios.post(config.addToCartUrl, {
-        productId: product.id,
-        quantity: 1,
-        order_delivery_type: 1,
-        lat: "28.6016406",
-        long: "77.3896809"
-      }, {
-        headers: {
-          ...config.cartHeaders,
-          'token': "null"
+      await axios.post(
+        config.addToCartUrl,
+        {
+          productId: product.id,
+          quantity: 1,
+          order_delivery_type: 1,
+          lat: "28.6016406",
+          long: "77.3896809",
+        },
+        {
+          headers: {
+            ...config.cartHeaders,
+            token: "null",
+          },
         }
-      });
+      );
+      console.log("Product added to cart successfully");
       const selectMessage = {
         role: "user",
-        content: `Add ${product.name}. to cart.`,
+        content: `Add ${product.name} to cart.`,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, selectMessage]);
       const aiMessage = {
         role: "assistant",
         content: `${product.name} has been added to your cart!`,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, aiMessage]);
-      speakText(aiMessage.content);
-  setTextInput("");
+      setMessages((prev) => [...prev, selectMessage, aiMessage]);
+      setTimeout(() => {
+        speakText(aiMessage.content);
+        isProcessingMessageRef.current = false;
+      }, 100);
+      setTextInput("");
     } catch (error) {
-      const aiMessage = {
+      console.error(`Error adding ${product.name} to cart:`, error);
+      const errorMessage = {
         role: "assistant",
-        content: `Product is currently out of stock or cannot be added to the cart.`,
+        content: `Failed to add ${product.name} to cart. Please try again.`,
         timestamp: new Date(),
       };
-      speakText(aiMessage.content);
-      console.error(`Error adding ${product.name} to cart:`, error);
+      setMessages((prev) => [...prev, errorMessage]);
+      setTimeout(() => {
+        speakText(errorMessage.content);
+        isProcessingMessageRef.current = false;
+      }, 100);
     }
-  }
+  };
+
   const structureResponse = async (rawText) => {
     try {
       const prompt = `Parse the following AI response and extract structured data in JSON format only. Do not include any other text outside the JSON.
       Response to parse: "${rawText}"
 
       Instructions:
-      - text: A clean, concise version of the response without mentioning or listing specific products (e.g., remove product names, prices, descriptions from the text unless they are not product-related).
+      - text: A clean, concise version of the response without mentioning or listing specific products.
       - num_products: The number of products mentioned or recommended (integer, 0 if none).
       - products: An array of product objects. For each product, extract only: {name: string, price: number, id: number, image: string}. If no products, empty array [].
 
@@ -344,45 +358,38 @@ const EnhancedVoiceChat = () => {
 
       const structuredData = await response.json();
 
-
-      // Handle different response formats
       let parsedData;
-
-      // Check if response is a string that needs parsing
-      if (typeof structuredData === 'string') {
-        // Try to match JSON within markdown code fences
-        const jsonMatch = structuredData.match(/```json\s*([\s\S]*?)\s*```/) ||
+      if (typeof structuredData === "string") {
+        const jsonMatch =
+          structuredData.match(/```json\s*([\s\S]*?)\s*```/) ||
           structuredData.match(/```[\s\S]*?([\s\S]*?)\s*```/) ||
-          // Try to match raw JSON string
           structuredData.match(/{[\s\S]*}/);
-
         if (jsonMatch && jsonMatch[1]) {
           parsedData = JSON.parse(jsonMatch[1].trim());
         } else {
-          // Try parsing the entire string as JSON
           try {
             parsedData = JSON.parse(structuredData);
           } catch {
-            // If parsing fails, return fallback
             throw new Error("Invalid JSON format");
           }
         }
-      } else if (typeof structuredData === 'object' && structuredData !== null) {
-        // If response is already an object, use it directly
+      } else if (typeof structuredData === "object" && structuredData !== null) {
         parsedData = structuredData;
       } else {
         throw new Error("Unexpected response format");
       }
 
-      // Validate the parsed data structure
-      if (!parsedData.text || typeof parsedData.num_products !== 'number' || !Array.isArray(parsedData.products)) {
+      if (
+        !parsedData.text ||
+        typeof parsedData.num_products !== "number" ||
+        !Array.isArray(parsedData.products)
+      ) {
         throw new Error("Invalid JSON structure");
       }
 
       return parsedData;
     } catch (error) {
       console.error("Structure response error:", error);
-      // Fallback to raw text
       return {
         text: rawText,
         num_products: 0,
@@ -391,20 +398,15 @@ const EnhancedVoiceChat = () => {
     }
   };
 
-  // Enhanced message handling with context awareness and response structuring
   const handleUserMessage = async (message) => {
     if (!message.trim() || isProcessingMessageRef.current) {
-
       return;
     }
 
-
     isProcessingMessageRef.current = true;
-
     stopSpeaking();
     setInterimTranscript("");
 
-    // Stop recognition to prevent feedback
     if (recognitionRef.current && isRecording) {
       recognitionRef.current.stop();
     }
@@ -429,10 +431,10 @@ const EnhancedVoiceChat = () => {
         }));
       }
 
-      // Structure the raw text response
-      const structured = await structureResponse(apiResponse.text || "Here are some products you might like:");
+      const structured = await structureResponse(
+        apiResponse.text || "Here are some products you might like:"
+      );
       console.log("Structured response:", structured);
-
 
       const aiMessage = {
         role: "assistant",
@@ -442,12 +444,9 @@ const EnhancedVoiceChat = () => {
       };
 
       setMessages((prev) => [...prev, aiMessage]);
-
-      // Delay speech to ensure processing is complete
       setTimeout(() => {
         speakText(aiMessage.content);
       }, 500);
-
     } catch (error) {
       console.error("Message handling error:", error);
       const errorMessage = {
@@ -459,14 +458,12 @@ const EnhancedVoiceChat = () => {
       speakText(errorMessage.content);
     } finally {
       setIsLoading(false);
-      // Reset processing flag after speech begins
       setTimeout(() => {
         isProcessingMessageRef.current = false;
       }, 2000);
     }
   };
 
-  // Enhanced API call with product handling
   const callEnhancedAPI = async (userInput) => {
     try {
       const conversationHistory = [
@@ -491,7 +488,6 @@ const EnhancedVoiceChat = () => {
         }),
       });
 
-
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -508,37 +504,33 @@ const EnhancedVoiceChat = () => {
     }
   };
 
-  // Enhanced text-to-speech with better control
   const speakText = (text) => {
     text = text.replace(/tool_code[\s\S]*/g, "").trim();
 
     if ("speechSynthesis" in window && text) {
       stopSpeaking();
-
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      utterance.pitch = 1;
+      utterance.rate = 1.3;
+      utterance.pitch = 0.8;
       utterance.volume = 0.8;
 
-      utterance.onstart = () => {
+      // Set the selected voice
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        console.log("Using voice:", selectedVoice.name);
+      }
 
+      utterance.onstart = () => {
         setIsSpeaking(true);
-        // Ensure recognition is stopped while speaking
         if (recognitionRef.current && isRecording) {
           recognitionRef.current.stop();
         }
       };
 
       utterance.onend = () => {
-
         setIsSpeaking(false);
-
-        // Wait a bit longer before restarting recognition
         if (autoListen && !isProcessingMessageRef.current) {
-          setTimeout(() => {
-
-            restartListening();
-          }, 1500);
+          setTimeout(() => restartListening(), 1500);
         }
       };
 
@@ -552,25 +544,26 @@ const EnhancedVoiceChat = () => {
 
       speechSynthesisRef.current = utterance;
       window.speechSynthesis.speak(utterance);
+    } else {
+      console.warn("Speech synthesis not supported or empty text");
     }
   };
 
   const stopSpeaking = () => {
+    console.log("stopSpeaking called");
     if (window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
-
     }
   };
 
   const clearConversation = () => {
     setMessages([]);
-    setMemory({ lists: {}, context: {}, preferences: {} });
+    setMemory({ lists: {}, context: {}, preferences: { selectedVoice: selectedVoice?.name || null } });
     stopSpeaking();
     setAutoListen(false);
     isProcessingMessageRef.current = false;
     lastProcessedTranscriptRef.current = "";
-
     if (recognitionRef.current && isRecording) {
       recognitionRef.current.stop();
     }
@@ -588,6 +581,17 @@ const EnhancedVoiceChat = () => {
     if (isSpeaking) return "speaking";
     if (isListening) return "listening";
     return "idle";
+  };
+
+  // Handle voice selection
+  const handleVoiceChange = (e) => {
+    const voiceName = e.target.value;
+    const selected = voices.find((voice) => voice.name === voiceName);
+    setSelectedVoice(selected || null);
+    setMemory((prev) => ({
+      ...prev,
+      preferences: { ...prev.preferences, selectedVoice: selected?.name || null },
+    }));
   };
 
   return (
@@ -622,24 +626,26 @@ const EnhancedVoiceChat = () => {
               </>
             )}
             <div
-              className={`w-full h-full rounded-full shadow-2xl transition-all duration-300 transform ${getOrbMode() === "listening"
-                ? "bg-gradient-to-r from-blue-400 to-blue-600 scale-110 animate-pulse shadow-blue-500/50"
-                : getOrbMode() === "speaking"
+              className={`w-full h-full rounded-full shadow-2xl transition-all duration-300 transform ${
+                getOrbMode() === "listening"
+                  ? "bg-gradient-to-r from-blue-400 to-blue-600 scale-110 animate-pulse shadow-blue-500/50"
+                  : getOrbMode() === "speaking"
                   ? "bg-gradient-to-r from-green-400 to-green-600 scale-110 animate-[wave_2s_ease-in-out_infinite] shadow-green-500/50"
                   : getOrbMode() === "thinking"
-                    ? "bg-gradient-to-r from-purple-400 to-purple-600 scale-110 animate-spin shadow-purple-500/50"
-                    : "bg-gradient-to-r from-gray-300 to-gray-400 scale-100"
-                }`}
+                  ? "bg-gradient-to-r from-purple-400 to-purple-600 scale-110 animate-spin shadow-purple-500/50"
+                  : "bg-gradient-to-r from-gray-300 to-gray-400 scale-100"
+              }`}
             >
               <div
-                className={`absolute inset-0 rounded-full opacity-50 ${getOrbMode() === "listening"
-                  ? "bg-blue-200 animate-pulse"
-                  : getOrbMode() === "speaking"
+                className={`absolute inset-0 rounded-full opacity-50 ${
+                  getOrbMode() === "listening"
+                    ? "bg-blue-200 animate-pulse"
+                    : getOrbMode() === "speaking"
                     ? "bg-green-200 animate-pulse"
                     : getOrbMode() === "thinking"
-                      ? "bg-purple-200 animate-pulse"
-                      : ""
-                  }`}
+                    ? "bg-purple-200 animate-pulse"
+                    : ""
+                }`}
               ></div>
             </div>
             <div className="absolute inset-0 flex items-center justify-center">
@@ -650,7 +656,10 @@ const EnhancedVoiceChat = () => {
                 <Volume2 className="w-8 h-8 text-white drop-shadow-md" />
               )}
               {getOrbMode() === "thinking" && (
-                <img src="/image.png" className="w-28  h-28 text-white rounded-full drop-shadow-md" />
+                <img
+                  src="/image.png"
+                  className="w-28 h-28 text-white rounded-full drop-shadow-md"
+                />
               )}
             </div>
           </div>
@@ -675,9 +684,7 @@ const EnhancedVoiceChat = () => {
                 d="M5 13l4 4L19 7"
               />
             </svg>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              Success!
-            </h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Success!</h3>
             <p className="text-sm text-gray-600">Successfully Added to the cart</p>
           </div>
         </div>
@@ -687,7 +694,7 @@ const EnhancedVoiceChat = () => {
       <div className="bg-white/95 backdrop-blur-md shadow-xl border-b border-blue-200/50 px-6 py-4 relative z-10">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-3">
-            <div className=" bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full shadow-lg">
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full shadow-lg">
               <img src="/image.png" className="w-8 h-8 text-white" />
             </div>
             <div>
@@ -698,12 +705,12 @@ const EnhancedVoiceChat = () => {
                 {isListening
                   ? "Listening to you..."
                   : isSpeaking
-                    ? "Responding now..."
-                    : isLoading
-                      ? "Thinking..."
-                      : autoListen
-                        ? "Ready to listen"
-                        : "Ready to chat"}
+                  ? "Responding now..."
+                  : isLoading
+                  ? "Thinking..."
+                  : autoListen
+                  ? "Ready to listen"
+                  : "Ready to chat"}
               </p>
             </div>
           </div>
@@ -725,7 +732,7 @@ const EnhancedVoiceChat = () => {
         </div>
       </div>
 
-      {/* Enhanced Settings */}
+      {/* Enhanced Settings with Voice Selection */}
       {showSettings && (
         <div className="bg-white/95 backdrop-blur-md border-b border-blue-200/50 px-6 py-4 space-y-4 relative z-10">
           <div>
@@ -738,6 +745,25 @@ const EnhancedVoiceChat = () => {
               rows={3}
               className="w-full px-4 py-3 border border-gray-300/50 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none shadow-sm transition-all"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Voice Selection
+            </label>
+            <select
+              value={selectedVoice?.name || ""}
+              onChange={handleVoiceChange}
+              className="w-full px-4 py-3 border border-gray-300/50 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all"
+            >
+              <option value="" disabled>
+                {voices.length === 0 ? "Loading voices..." : "Select a voice"}
+              </option>
+              {voices.map((voice) => (
+                <option key={voice.name} value={voice.name}>
+                  {voice.name} ({voice.lang})
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex items-center space-x-4">
             <label className="flex items-center space-x-2">
@@ -765,7 +791,10 @@ const EnhancedVoiceChat = () => {
         {messages.length === 0 && (
           <div className="text-center text-gray-600 mt-8">
             <div className="mb-4 rounded-full">
-              <img src="/image.png" className="w-16 h-16 rounded-full mx-auto text-blue-500 mb-4 animate-bounce" />
+              <img
+                src="/image.png"
+                className="w-16 h-16 rounded-full mx-auto text-blue-500 mb-4 animate-bounce"
+              />
             </div>
             <p className="text-xl mb-2 font-semibold text-gray-700">
               Hello! I'm your Deliverit Assistant.
@@ -782,20 +811,21 @@ const EnhancedVoiceChat = () => {
         {messages.map((m, i) => (
           <div key={i}>
             <div
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"
-                } items-start space-x-2 ${m.role === "user" ? "space-x-reverse" : ""
-                }`}
+              className={`flex ${
+                m.role === "user" ? "justify-end" : "justify-start"
+              } items-start space-x-2 ${m.role === "user" ? "space-x-reverse" : ""}`}
             >
               {m.role === "assistant" && (
-                <div className="p-2  rounded-full mt-1">
+                <div className="p-2 rounded-full mt-1">
                   <img src="/image.png" className="w-8 h-8 text-white rounded-full" />
                 </div>
               )}
               <div
-                className={`max-w-xs lg:max-w-md px-5 py-4 rounded-2xl shadow-lg transition-all hover:shadow-xl ${m.role === "user"
-                  ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
-                  : "bg-white/80 backdrop-blur-sm text-gray-800 border border-gray-200/50"
-                  }`}
+                className={`max-w-xs lg:max-w-md px-5 py-4 rounded-2xl shadow-lg transition-all hover:shadow-xl ${
+                  m.role === "user"
+                    ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+                    : "bg-white/80 backdrop-blur-sm text-gray-800 border border-gray-200/50"
+                }`}
               >
                 <p className="text-sm leading-relaxed">
                   {m.content
@@ -804,8 +834,9 @@ const EnhancedVoiceChat = () => {
                     .trim()}
                 </p>
                 <p
-                  className={`text-xs mt-2 ${m.role === "user" ? "text-blue-100" : "text-gray-500"
-                    }`}
+                  className={`text-xs mt-2 ${
+                    m.role === "user" ? "text-blue-100" : "text-gray-500"
+                  }`}
                 >
                   {m.timestamp.toLocaleTimeString([], {
                     hour: "2-digit",
@@ -823,15 +854,12 @@ const EnhancedVoiceChat = () => {
             {/* Assistant Product Suggestions */}
             {m.role === "assistant" && m.products && m.products.length > 0 && (
               <div className="gap-4 ml-12 mt-4">
-                {/* Assistant Message */}
-                <div className="">
+                <div>
                   <p className="text-sm font-medium text-gray-700">
                     I found {m.products.length} product{m.products.length > 1 ? "s" : ""}.
                     Here are some more trending products you might like:
                   </p>
                 </div>
-
-                {/* Horizontal Product Cards (Right Side) */}
                 <div className="overflow-x-auto mb-2">
                   <div className="flex gap-4">
                     {m.products.map((product, idx) => (
@@ -867,17 +895,13 @@ const EnhancedVoiceChat = () => {
                 </div>
               </div>
             )}
-
           </div>
         ))}
 
-        {/* Interim transcript display */}
         {interimTranscript && (
           <div className="flex justify-end items-start space-x-2 space-x-reverse">
             <div className="max-w-xs lg:max-w-md px-5 py-4 rounded-2xl bg-gradient-to-r from-blue-400 to-blue-500 text-white shadow-lg opacity-80 border border-blue-300/30">
-              <p className="text-sm leading-relaxed italic">
-                {interimTranscript}
-              </p>
+              <p className="text-sm leading-relaxed italic">{interimTranscript}</p>
             </div>
             <div className="p-2 bg-gradient-to-r from-gray-400 to-gray-500 rounded-full mt-1 shadow-lg">
               <User className="w-5 h-5 text-white" />
@@ -917,18 +941,19 @@ const EnhancedVoiceChat = () => {
           <button
             onClick={toggleRecording}
             disabled={isLoading}
-            className={`p-4 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl ${isListening
-              ? "bg-gradient-to-r from-red-500 to-red-600 text-white scale-110 animate-pulse"
-              : autoListen
+            className={`p-4 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl ${
+              isListening
+                ? "bg-gradient-to-r from-red-500 to-red-600 text-white scale-110 animate-pulse"
+                : autoListen
                 ? "bg-gradient-to-r from-green-500 to-green-600 text-white hover:scale-105"
                 : "bg-gray-200 text-gray-600 hover:bg-gray-300 hover:scale-105"
-              }`}
+            }`}
             title={
               isListening
                 ? "Stop listening"
                 : autoListen
-                  ? "Auto-listening enabled - Click to stop"
-                  : "Start listening"
+                ? "Auto-listening enabled - Click to stop"
+                : "Start listening"
             }
           >
             {isListening ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
@@ -941,9 +966,7 @@ const EnhancedVoiceChat = () => {
               onKeyPress={handleKeyPress}
               disabled={isLoading || isProcessingMessageRef.current}
               placeholder={
-                isListening
-                  ? "Listening... or type here"
-                  : "Type your message or use voice..."
+                isListening ? "Listening... or type here" : "Type your message or use voice..."
               }
               rows={1}
               className="w-full px-4 py-3 border border-gray-300/50 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none shadow-sm transition-all hover:shadow-md disabled:bg-gray-50"
@@ -960,10 +983,11 @@ const EnhancedVoiceChat = () => {
 
           <button
             onClick={isSpeaking ? stopSpeaking : undefined}
-            className={`p-4 rounded-full transition-all duration-300 shadow-lg ${isSpeaking
-              ? "bg-gradient-to-r from-green-500 to-green-600 text-white animate-pulse hover:scale-105 cursor-pointer"
-              : "bg-gray-200 text-gray-600 hover:bg-gray-300 hover:scale-105 cursor-default"
-              }`}
+            className={`p-4 rounded-full transition-all duration-300 shadow-lg ${
+              isSpeaking
+                ? "bg-gradient-to-r from-green-500 to-green-600 text-white animate-pulse hover:scale-105 cursor-pointer"
+                : "bg-gray-200 text-gray-600 hover:bg-gray-300 hover:scale-105 cursor-default"
+            }`}
             title={isSpeaking ? "Click to stop speaking" : "Speech status"}
           >
             {isSpeaking ? <Volume2 className="w-6 h-6" /> : <VolumeX className="w-6 h-6" />}
@@ -974,13 +998,11 @@ const EnhancedVoiceChat = () => {
             {autoListen && isListening
               ? "🎤 Listening... Speak naturally"
               : autoListen
-                ? "🎤 Auto-listen enabled • Will resume after AI responds"
-                : "Click mic to start listening • Type messages • Press Enter to send"}
+              ? "🎤 Auto-listen enabled • Will resume after AI responds"
+              : "Click mic to start listening • Type messages • Press Enter to send"}
           </p>
           {isProcessingMessageRef.current && (
-            <p className="text-xs text-orange-600 mt-1">
-              Processing your message...
-            </p>
+            <p className="text-xs text-orange-600 mt-1">Processing your message...</p>
           )}
         </div>
       </div>
