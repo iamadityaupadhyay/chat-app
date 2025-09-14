@@ -509,7 +509,7 @@ const EnhancedVoiceChat = () => {
     if ("speechSynthesis" in window && text) {
       stopSpeaking();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.3;
+      utterance.rate = 1;
       utterance.pitch = 0.8;
       utterance.volume = 0.8;
 
