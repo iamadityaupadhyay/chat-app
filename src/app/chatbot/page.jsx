@@ -56,7 +56,7 @@ const EnhancedVoiceChat = () => {
         const savedVoice = memory.preferences.selectedVoice;
         const defaultVoice = savedVoice
           ? availableVoices.find((voice) => voice.name === savedVoice)
-          : availableVoices[88];
+          : availableVoices[0];
         setSelectedVoice(defaultVoice || null);
       }
     };
