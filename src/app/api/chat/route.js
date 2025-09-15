@@ -115,6 +115,8 @@ Guidelines for natural conversation:
         // Add to cart patterns
         const addToCartPatterns = [
             /add (.+) to cart/i,
+            /add (.+) to card/i,
+            /add (.+) to cut/i,
             /buy (.+)/i,
             /purchase (.+)/i,
             /order (.+)/i,
@@ -124,6 +126,15 @@ Guidelines for natural conversation:
         // Clear cart patterns
         const clearCartPatterns = [
             /remove cart/i,
+            /empty cart/i,
+            /delete cart/i,
+            /clear my cart/i,
+            /empty my cart/i,
+            /delete my cart/i,
+            /clear my cart/i,
+            /clear cut/i,
+            /clear card/i,
+
             /clear cart/i,
         ];
 
@@ -142,7 +153,7 @@ Guidelines for natural conversation:
             if (latestMessage.match(pattern)) {
                 clearCartTriggered = true;
                 try {
-                    const clearCartResponse = await fetch(`${process.env.API_URL}/api/user/clearCart`, {
+                    const clearCartResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/clearCart`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

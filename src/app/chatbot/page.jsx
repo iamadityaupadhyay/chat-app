@@ -56,7 +56,7 @@ const EnhancedVoiceChat = () => {
         const savedVoice = memory.preferences.selectedVoice;
         const defaultVoice = savedVoice
           ? availableVoices.find((voice) => voice.name === savedVoice)
-          : availableVoices[88];
+          : availableVoices[0];
         setSelectedVoice(defaultVoice || null);
       }
     };
@@ -275,7 +275,7 @@ const EnhancedVoiceChat = () => {
 
     try {
       await axios.post(
-        config.addToCartUrl,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/user/add_to_cart`,
         {
           productId: product.id,
           quantity: 1,
@@ -311,7 +311,7 @@ const EnhancedVoiceChat = () => {
       console.error(`Error adding ${product.name} to cart:`, error);
       const errorMessage = {
         role: "assistant",
-        content: `Failed to add ${product.name} to cart. Please try again.`,
+        content: `${product.name} is currently out of stock or cannot be added to the cart.`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -509,7 +509,7 @@ const EnhancedVoiceChat = () => {
     if ("speechSynthesis" in window && text) {
       stopSpeaking();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.3;
+      utterance.rate = 1;
       utterance.pitch = 0.8;
       utterance.volume = 0.8;
 
